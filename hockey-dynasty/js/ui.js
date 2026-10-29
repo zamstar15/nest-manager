@@ -1,6 +1,6 @@
 // UI core: helpers, portraits, layout shell, modals, event window, character sheet.
 var HD = HD || {};
-HD.UI = { tab: 'home', sub: {}, modal: null, sheetMsg: null, trade: { team: null, give: [], get: [] }, newsFilter: 'all', rosterSort: 'slot', faPos: 'all', setup: null };
+HD.UI = { tab: 'office', sub: {}, modal: null, sheetMsg: null, trade: { team: null, give: [], get: [] }, newsFilter: 'all', rosterSort: 'slot', faPos: 'all', setup: null };
 
 // ---------- Small render helpers ----------
 var U = HD.UI;
@@ -49,21 +49,29 @@ U.spark = function (arr, w, h) {
 // ---------- Procedural portraits ----------
 U.SKIN = ['#f3d7c0', '#eac0a0', '#d6a47e', '#b8825c', '#8f5f40', '#6b442c'];
 U.HAIR = ['#24180f', '#3d2818', '#5c3c22', '#8a6034', '#c9a15d', '#e2c98f', '#151515', '#7a3b1f'];
-U.portrait = function (p, size) {
-  size = size || 40;
-  if (!p) return '<svg class="portrait" width="' + size + '" height="' + size + '"></svg>';
+// Deterministic appearance shared by 2D portraits and 3D office characters.
+U.looks = function (p) {
   var h = HD.hash(p.id + p.first);
   var r = function (n) { var v = h % n; h = Math.floor(h / n) + 7919 * (v + 1); return v; };
   var skin = U.SKIN[r(U.SKIN.length)];
   var hair = U.HAIR[r(U.HAIR.length)];
   if (p.age >= 70) hair = '#e8e8e8'; else if (p.age >= 55) hair = '#a7a7a7'; else if (p.age >= 46 && r(2)) hair = '#7d7368';
-  var style = r(5), beard = p.gender === 'm' && p.age >= 20 && r(3) === 0, f = p.gender === 'f';
+  var style = r(5), beard = p.gender === 'm' && p.age >= 20 && r(3) === 0;
   var team = p.teamId && HD.G.teams[p.teamId];
-  var c1 = team ? team.colors[0] : (p.role === 'journalist' ? '#3b3f46' : p.role === 'agent' ? '#2b2f38' : p.role === 'owner' ? '#1b1b1b' : '#384050');
-  var c2 = team ? team.colors[1] : '#8a8f99';
-  var suit = p.role === 'owner' || p.role === 'gm' || p.role === 'manager' || p.role === 'agent' || p.role === 'commissioner' || p.role === 'coach';
+  return {
+    skin: skin, hair: hair, style: style, beard: beard, female: p.gender === 'f', team: team,
+    c1: team ? team.colors[0] : (p.role === 'journalist' ? '#3b3f46' : p.role === 'agent' ? '#2b2f38' : p.role === 'owner' ? '#1b1b1b' : '#384050'),
+    c2: team ? team.colors[1] : '#8a8f99',
+    suit: p.role === 'owner' || p.role === 'gm' || p.role === 'manager' || p.role === 'agent' || p.role === 'commissioner' || p.role === 'coach'
+  };
+};
+U.portrait = function (p, size) {
+  size = size || 40;
+  if (!p) return '<svg class="portrait" width="' + size + '" height="' + size + '"></svg>';
+  var L = U.looks(p);
+  var skin = L.skin, hair = L.hair, style = L.style, beard = L.beard, f = L.female, team = L.team, c1 = L.c1, c2 = L.c2, suit = L.suit;
   var bg1 = team ? team.colors[0] : '#2a3140';
-  var s = '<svg class="portrait' + (size >= 80 ? ' lg' : '') + '" width="' + size + '" height="' + size + '" viewBox="0 0 100 100">';
+  var s = '<svg xmlns="http://www.w3.org/2000/svg" class="portrait' + (size >= 80 ? ' lg' : '') + '" width="' + size + '" height="' + size + '" viewBox="0 0 100 100">';
   s += '<defs><linearGradient id="bg' + p.id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + bg1 + '" stop-opacity=".55"/><stop offset="1" stop-color="#0b0e13"/></linearGradient></defs>';
   s += '<rect width="100" height="100" fill="url(#bg' + p.id + ')"/>';
   // Long hair behind head
@@ -128,18 +136,31 @@ HD.UI.render = function () {
   html += '<button class="small" data-act="menu" title="Save / load / new game">☰</button>';
   html += pending ? '<button class="primary advance" data-act="openEvent">⚑ Decision Pending (' + pending + ')</button>' : '<button class="primary advance" data-act="advance" title="Space">Continue ▶</button>';
   html += '</div><div class="body"><nav class="nav">';
-  var tabs = [['home', '🏠', 'Overview'], ['roster', '🏒', 'Roster'], ['people', '👥', 'Relations'], ['league', '🏆', 'League'], ['market', '🔁', 'Transactions'], ['finance', '🏦', 'Club Finances'], ['personal', '💼', 'Your Life'], ['chronicle', '📜', 'Chronicle']];
+  var tabs = [['office', '🏢', 'Office'], ['home', '🏠', 'Overview'], ['roster', '🏒', 'Roster'], ['people', '👥', 'Relations'], ['league', '🏆', 'League'], ['market', '🔁', 'Transactions'], ['finance', '🏦', 'Club Finances'], ['personal', '💼', 'Your Life'], ['chronicle', '📜', 'Chronicle']];
   tabs.forEach(function (tb) {
     var badge = '';
     if (tb[0] === 'market' && phase === 'freeagency') badge = '<span class="badge">FA</span>';
     if (tb[0] === 'market' && phase === 'draft') badge = '<span class="badge">Draft</span>';
     html += '<a data-act="tab" data-tab="' + tb[0] + '" class="' + (U.tab === tb[0] ? 'on' : '') + '"><span class="ico">' + tb[1] + '</span><span class="lbl">' + tb[2] + '</span>' + badge + '</a>';
   });
-  html += '</nav><main class="main">' + (HD.VIEWS[U.tab] || HD.VIEWS.home)() + '</main></div>';
+  if (U.tab === 'office' && !HD.Office.supported()) U.tab = 'home';
+  var office = U.tab === 'office';
+  html += '</nav><main class="main' + (office ? ' office-main' : '') + '">' + (office ? U.officeHtml() : (HD.VIEWS[U.tab] || HD.VIEWS.home)()) + '</main></div>';
   var scroll = window.scrollY;
   app.innerHTML = html;
-  window.scrollTo(0, scroll);
+  window.scrollTo(0, office ? 0 : scroll);
+  if (office) HD.Office.mount(document.getElementById('office-host'));
   U.renderModal();
+};
+
+U.goTab = function (tab) { U.tab = tab; U.close(); window.scrollTo(0, 0); };
+U.officeHtml = function () {
+  var G = HD.G, n = G.pendingEvents.length;
+  var spots = [['openEvent', '📥', 'Inbox' + (n ? ' (' + n + ')' : '')], ['home', '🖥️', 'Computer'], ['roster', '📋', 'Whiteboard'], ['people', '📌', 'Relations'], ['league', '📺', 'TV'], ['market', '☎️', 'Phone'], ['finance', '🏦', 'Safe'], ['personal', '💻', 'Laptop'], ['chronicle', '📜', 'Chronicle']];
+  var h = '<div class="office-host" id="office-host"><div class="office-tip"></div><div class="office-bubble" data-act="openEvent"></div>';
+  h += '<div class="office-hud"><div class="office-title">Your Office <span>Click anything in the room</span></div><div class="office-spots">';
+  spots.forEach(function (s) { h += s[0] === 'openEvent' ? '<button class="small' + (n ? ' primary' : '') + '" data-act="openEvent"' + (n ? '' : ' disabled') + '>' + s[1] + ' ' + s[2] + '</button>' : '<button class="small" data-act="tab" data-tab="' + s[0] + '">' + s[1] + ' ' + s[2] + '</button>'; });
+  return h + '</div></div></div>';
 };
 
 U.renderModal = function () {
@@ -175,7 +196,7 @@ U.eventHtml = function () {
   h += '<div class="event-text">' + v.text + '</div>';
   if (ce.outcome !== null) {
     h += '<div class="outcome">' + U.e(ce.outcome) + '</div>';
-    h += '<div class="event-opts"><button class="primary" data-act="eventDone">' + (HD.G.pendingEvents.length ? 'Next ▸' : 'Continue') + '</button></div>';
+    h += '<div class="event-opts"><button class="primary" data-act="eventDone">' + (HD.G.pendingEvents.length && U.tab !== 'office' ? 'Next ▸' : 'Continue') + '</button></div>';
   } else {
     h += '<div class="event-opts">' + v.options.map(function (o, i) {
       return '<button class="event-opt" data-act="eventOpt" data-i="' + i + '"' + (o.disabled ? ' disabled' : '') + '>' + U.e(o.label) + (o.hint ? '<span class="hint">' + U.e(o.hint) + '</span>' : '') + '</button>';

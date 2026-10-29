@@ -18,8 +18,8 @@
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = 'hockey-dynasty-' + HD.G.season + '-w' + HD.G.week + '.json'; a.click();
     },
-    newGame: function () { if (!HD.G || HD.G.gameOver || confirm('Abandon this career and start over?')) { HD.deleteSave(); HD.G = null; U.modal = null; U.tab = 'home'; rerender(); } },
-    loadGame: function () { if (HD.load()) { U.tab = 'home'; rerender(); if (HD.G.pendingEvents.length) U.showEvent(); } else U.toast('Save could not be loaded.'); },
+    newGame: function () { if (!HD.G || HD.G.gameOver || confirm('Abandon this career and start over?')) { HD.deleteSave(); HD.G = null; U.modal = null; U.tab = 'office'; rerender(); } },
+    loadGame: function () { if (HD.load()) { U.tab = 'office'; rerender(); if (HD.G.pendingEvents.length && U.tab !== 'office') U.showEvent(); } else U.toast('Save could not be loaded.'); },
     retire: function () { if (confirm('Retire from hockey for good?')) { HD.endCareer('You retired from hockey.'); saveAndRender(); } },
 
     // Start screen
@@ -39,9 +39,9 @@
     startGame: function () {
       HD.newGame(U.setup);
       HD.save();
-      U.tab = 'home';
+      U.tab = 'office';
       rerender();
-      U.showEvent();
+      if (U.tab !== 'office') U.showEvent();
     },
 
     // Calendar
@@ -52,13 +52,15 @@
       rerender();
       if (HD.G.gameOver) return;
       var hasReport = r && (r.games.length || r.series.length || r.news.some(function (n) { return n.major || n.team === HD.me().teamId; }));
-      if (hasReport) { U.showReport(r); if (HD.G.pendingEvents.length) U.afterClose = U.showEvent; }
-      else if (HD.G.pendingEvents.length) U.showEvent();
+      // In the office, visitors walk in and the phone rings instead of popping dialogs straight away
+      var inOffice = U.tab === 'office';
+      if (hasReport) { U.showReport(r); if (HD.G.pendingEvents.length && !inOffice) U.afterClose = U.showEvent; }
+      else if (HD.G.pendingEvents.length && !inOffice) U.showEvent();
     },
-    openEvent: function () { U.showEvent(); },
+    openEvent: function () { if (HD.G.pendingEvents.length) U.showEvent(); },
     eventOpt: function (d) { U.chooseEventOption(+d.i); },
     eventDone: function () {
-      if (HD.G.pendingEvents.length) U.showEvent();
+      if (HD.G.pendingEvents.length && U.tab !== 'office') U.showEvent();
       else { U.close(); }
     },
 
@@ -295,5 +297,5 @@
   // Boot
   if (HD.hasSave() && HD.load()) { /* resume straight into the game */ }
   HD.UI.render();
-  if (HD.G && HD.G.pendingEvents.length) U.showEvent();
+  if (HD.G && HD.G.pendingEvents.length && U.tab !== 'office') U.showEvent();
 })();
